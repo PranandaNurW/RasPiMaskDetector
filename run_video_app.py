@@ -37,7 +37,7 @@ TEMP_SENSOR = MLX90614(BUS, address=0x5a)
 
 #LED setup
 GREEN_LED = 27
-RED_LED = 17
+RED_LED = 13
 GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(GREEN_LED, GPIO.OUT, initial=GPIO.LOW)
@@ -151,18 +151,20 @@ def upload_to_thingspeak(temp, label):
 def openGate():
     PWM_SERVO.set_servo_pulsewidth(SERVO_MOTOR, 500)
     LOG.info("Gate open")
-    sleep(5)
+    sleep(0.1)
 
 
 def closeGate():
     PWM_SERVO.set_servo_pulsewidth(SERVO_MOTOR, 1500)
-    sleep(3)
+    sleep(0.1)
 
 
 #Apply Algorithm
 def applyLogic(label, frame):
     temp = getTempData()
-    if temp >= 35:
+    person_temp = "Temp: {:.1f}".format(temp)
+    LOG.info(person_temp)
+    if temp >= 37:
         GPIO.output(BUZZER, GPIO.LOW)
         GPIO.output(RED_LED, GPIO.HIGH)
         upload_to_azure(frame)
@@ -172,11 +174,13 @@ def applyLogic(label, frame):
         GPIO.output(GREEN_LED, GPIO.LOW)
         GPIO.output(BUZZER, GPIO.HIGH)
         closeGate()
-    else:
+        sleep(3)
+    elif (label=="Mask"):
         GPIO.output(BUZZER, GPIO.HIGH)
         GPIO.output(GREEN_LED, GPIO.HIGH)
         GPIO.output(RED_LED, GPIO.LOW)
         openGate()
+        sleep(3)
 
 
 def getTempData():
@@ -209,7 +213,6 @@ def detect_mask(locs, preds, frame):
         person_temp = "Temp: {:.1f}".format(temp)
         
         LOG.info(label_out)
-        LOG.info(person_temp)
 
         send_label = 1 if label == "Mask" else 0
         upload_to_thingspeak(temp, send_label)
@@ -234,20 +237,20 @@ def run_video(detect_and_predict_mask):
         if frame is not None:
             # detect faces in the frame and determine if they are wearing a
             # face mask or not
-            if GPIO.input(IR_SENSOR):
-                closeEverything()
-            else:
+            # show the output frame
+            if GPIO.input(IR_SENSOR) and TEMP_SENSOR.get_obj_temp() >= 30:
                 (locs, preds) = detect_and_predict_mask(frame, faceNet, maskNet)
 
                 # loop over the detected face locations and their corresponding
                 # locations
                 detect_mask(locs, preds, frame)
+                closeEverything()
+            else:
+                closeEverything()
+                
             
-
-            # show the output frame
             cv2.imshow("Frame", frame)
             key = cv2.waitKey(1) & 0xFF
-
             # if the `q` key was pressed, break from the loop
             if key == ord("q"):
                     break
